@@ -125,6 +125,104 @@ else
     record_status "tmux" "✅ Already Installed" "Version: $(tmux -V 2>/dev/null || echo 'unknown')"
 fi
 
+# Configure tmux with TPM and plugins
+echo "### 🔧 Tmux Configuration" >> "$REPORT_FILE"
+configure_tmux() {
+    local TMUX_DIR="$WORKSPACE_ROOT/.tmux"
+    local TMUX_CONF="$TMUX_DIR/tmux.conf"
+    local TPM_DIR="$TMUX_DIR/plugins/tpm"
+
+    echo "Configuring tmux..."
+
+    # Create directory structure
+    mkdir -p "$TMUX_DIR/plugins"
+    mkdir -p "$TMUX_DIR/resurrect"
+
+    # Write tmux configuration
+    cat > "$TMUX_CONF" << 'TMUX_EOF'
+# MANA Workspace tmux configuration
+
+# Scrollback buffer
+set -g history-limit 10000
+
+# Mouse mode
+set -g mouse on
+
+# Plugin manager (TPM)
+set -g @plugin 'tmux-plugins/tpm'
+
+# Session persistence plugins
+set -g @plugin 'tmux-plugins/tmux-resurrect'
+set -g @plugin 'tmux-plugins/tmux-continuum'
+
+# Continuum settings - auto-save and auto-restore
+set -g @continuum-restore 'on'
+set -g @continuum-save-interval '15'
+
+# Resurrect settings
+set -g @resurrect-capture-pane-contents 'on'
+set -g @resurrect-strategy-vim 'session'
+TMUX_EOF
+
+    # Add dynamic paths based on workspace location
+    echo "" >> "$TMUX_CONF"
+    echo "# Store resurrect data in workspace .tmux directory" >> "$TMUX_CONF"
+    echo "set -g @resurrect-dir '$TMUX_DIR/resurrect'" >> "$TMUX_CONF"
+    echo "" >> "$TMUX_CONF"
+    echo "# Initialize TPM (keep at bottom of config)" >> "$TMUX_CONF"
+    echo "run-shell '$TPM_DIR/tpm'" >> "$TMUX_CONF"
+
+    # Install TPM if not present
+    if [[ ! -d "$TPM_DIR" ]]; then
+        echo "Installing Tmux Plugin Manager..."
+        if command_exists git; then
+            if git clone --depth 1 https://github.com/tmux-plugins/tpm "$TPM_DIR" 2>/dev/null; then
+                echo "TPM installed successfully"
+            else
+                echo "Warning: Failed to install TPM"
+                record_status "tmux-config" "⚠️ Partial" "Config created but TPM installation failed"
+                return 1
+            fi
+        else
+            echo "Warning: git not available, cannot install TPM"
+            record_status "tmux-config" "⚠️ Partial" "Config created but git not available for TPM"
+            return 1
+        fi
+    fi
+
+    # Install plugins via TPM
+    if [[ -x "$TPM_DIR/bin/install_plugins" ]]; then
+        echo "Installing tmux plugins..."
+        TMUX_PLUGIN_MANAGER_PATH="$TMUX_DIR/plugins" "$TPM_DIR/bin/install_plugins" 2>/dev/null || true
+    fi
+
+    # Apply config to running tmux server if present
+    if command_exists tmux && tmux list-sessions &>/dev/null; then
+        echo "Applying tmux configuration to running server..."
+        tmux source-file "$TMUX_CONF" 2>/dev/null || true
+        # Also set directly in case source fails
+        tmux set -g history-limit 10000 2>/dev/null || true
+        tmux set -g mouse on 2>/dev/null || true
+    fi
+
+    record_status "tmux-config" "✅ Success" "Config, TPM, and plugins installed to $TMUX_DIR"
+    return 0
+}
+
+# Get workspace root (parent of .devcontainer)
+WORKSPACE_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Only configure tmux if it's installed and not on Windows
+if [ "$PLATFORM" != "windows" ] && command_exists tmux; then
+    configure_tmux
+else
+    if [ "$PLATFORM" == "windows" ]; then
+        record_status "tmux-config" "⚠️ Skipped" "Windows environment - tmux config not applicable"
+    else
+        record_status "tmux-config" "⚠️ Skipped" "tmux not installed"
+    fi
+fi
+
 # Install GitHub CLI
 echo "### 🐙 GitHub CLI Installation" >> "$REPORT_FILE"
 if ! command_exists gh; then
@@ -330,6 +428,7 @@ fi
 echo "| Tool | Status | Notes |" >> "$REPORT_FILE"
 echo "|------|--------|-------|" >> "$REPORT_FILE"
 echo "| tmux | ${INSTALL_STATUS[tmux]} | ${INSTALL_NOTES[tmux]} |" >> "$REPORT_FILE"
+echo "| tmux config | ${INSTALL_STATUS[tmux-config]} | ${INSTALL_NOTES[tmux-config]} |" >> "$REPORT_FILE"
 echo "| GitHub CLI | ${INSTALL_STATUS[gh]} | ${INSTALL_NOTES[gh]} |" >> "$REPORT_FILE"
 echo "| Claude Code | ${INSTALL_STATUS[claude-code]} | ${INSTALL_NOTES[claude-code]} |" >> "$REPORT_FILE"
 echo "| ccdash | ${INSTALL_STATUS[ccdash]} | ${INSTALL_NOTES[ccdash]} |" >> "$REPORT_FILE"
@@ -338,7 +437,7 @@ echo "" >> "$REPORT_FILE"
 
 # Add manual installation instructions for failed items
 FAILED_ITEMS=0
-for tool in tmux gh claude-code ccdash mana; do
+for tool in tmux tmux-config gh claude-code ccdash mana; do
     if [[ "${INSTALL_STATUS[$tool]}" == *"Failed"* ]]; then
         ((FAILED_ITEMS++))
     fi
@@ -370,7 +469,43 @@ if [ $FAILED_ITEMS -gt 0 ]; then
         echo '```' >> "$REPORT_FILE"
         echo "" >> "$REPORT_FILE"
     fi
-    
+
+    if [[ "${INSTALL_STATUS[tmux-config]}" == *"Failed"* ]] || [[ "${INSTALL_STATUS[tmux-config]}" == *"Partial"* ]]; then
+        echo "### 🔧 Configuring tmux manually" >> "$REPORT_FILE"
+        echo "" >> "$REPORT_FILE"
+        echo "**Step 1: Create the tmux configuration directory:**" >> "$REPORT_FILE"
+        echo '```bash' >> "$REPORT_FILE"
+        echo "mkdir -p .tmux/plugins .tmux/resurrect" >> "$REPORT_FILE"
+        echo '```' >> "$REPORT_FILE"
+        echo "" >> "$REPORT_FILE"
+        echo "**Step 2: Install Tmux Plugin Manager (TPM):**" >> "$REPORT_FILE"
+        echo '```bash' >> "$REPORT_FILE"
+        echo "git clone https://github.com/tmux-plugins/tpm .tmux/plugins/tpm" >> "$REPORT_FILE"
+        echo '```' >> "$REPORT_FILE"
+        echo "" >> "$REPORT_FILE"
+        echo "**Step 3: Create the tmux configuration file (.tmux/tmux.conf):**" >> "$REPORT_FILE"
+        echo '```bash' >> "$REPORT_FILE"
+        echo 'cat > .tmux/tmux.conf << '\''EOF'\''' >> "$REPORT_FILE"
+        echo "set -g history-limit 10000" >> "$REPORT_FILE"
+        echo "set -g mouse on" >> "$REPORT_FILE"
+        echo "set -g @plugin 'tmux-plugins/tpm'" >> "$REPORT_FILE"
+        echo "set -g @plugin 'tmux-plugins/tmux-resurrect'" >> "$REPORT_FILE"
+        echo "set -g @plugin 'tmux-plugins/tmux-continuum'" >> "$REPORT_FILE"
+        echo "set -g @continuum-restore 'on'" >> "$REPORT_FILE"
+        echo "set -g @continuum-save-interval '15'" >> "$REPORT_FILE"
+        echo "set -g @resurrect-capture-pane-contents 'on'" >> "$REPORT_FILE"
+        echo "run-shell '.tmux/plugins/tpm/tpm'" >> "$REPORT_FILE"
+        echo "EOF" >> "$REPORT_FILE"
+        echo '```' >> "$REPORT_FILE"
+        echo "" >> "$REPORT_FILE"
+        echo "**Step 4: Install plugins (run inside tmux):**" >> "$REPORT_FILE"
+        echo '```bash' >> "$REPORT_FILE"
+        echo "tmux source .tmux/tmux.conf" >> "$REPORT_FILE"
+        echo "# Then press: prefix + I (capital i) to install plugins" >> "$REPORT_FILE"
+        echo '```' >> "$REPORT_FILE"
+        echo "" >> "$REPORT_FILE"
+    fi
+
     if [[ "${INSTALL_STATUS[gh]}" == *"Failed"* ]]; then
         echo "### 🐙 Installing GitHub CLI manually" >> "$REPORT_FILE"
         echo "" >> "$REPORT_FILE"

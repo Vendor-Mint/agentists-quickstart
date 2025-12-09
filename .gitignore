@@ -51,3 +51,7 @@ venv/
 env/
 .Python
 .devcontainer/installation-report.md
+.mana/metadata.sqlite
+.mana/mana
+.ccdash/tokens.db
+.mana/learning-state.json

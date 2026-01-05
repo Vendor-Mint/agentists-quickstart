@@ -5,6 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TMUX_DIR="$SCRIPT_DIR/.tmux"
 TMUX_CONF="$TMUX_DIR/tmux.conf"
 TPM_DIR="$TMUX_DIR/plugins/tpm"
+MANA_DIR="$HOME/.mana"
+MANA_BIN="$MANA_DIR/mana"
+MANA_REPO="jedarden/MANA"
 
 # Phonetic alphabet for tmux session naming
 PHONETIC_ALPHABET=(
@@ -60,6 +63,68 @@ install_plugins() {
     fi
 }
 
+# Install kubectl if not present
+install_kubectl() {
+    echo "Installing kubectl..."
+    local KUBECTL_VERSION
+    KUBECTL_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
+
+    # Detect architecture
+    local ARCH
+    case "$(uname -m)" in
+        x86_64) ARCH="amd64" ;;
+        aarch64|arm64) ARCH="arm64" ;;
+        *) echo "Error: Unsupported architecture $(uname -m)"; return 1 ;;
+    esac
+
+    # Download kubectl
+    curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl"
+    chmod +x kubectl
+
+    # Install to /usr/local/bin or ~/.local/bin
+    if [[ -w /usr/local/bin ]]; then
+        mv kubectl /usr/local/bin/kubectl
+    elif sudo -n true 2>/dev/null; then
+        sudo mv kubectl /usr/local/bin/kubectl
+    else
+        mkdir -p "$HOME/.local/bin"
+        mv kubectl "$HOME/.local/bin/kubectl"
+        echo "kubectl installed to ~/.local/bin - ensure it's in your PATH"
+    fi
+}
+
+# Install mana from GitHub releases
+install_mana() {
+    echo "Installing mana..."
+    mkdir -p "$MANA_DIR"
+
+    # Download latest release using gh if available, otherwise curl
+    if command -v gh &>/dev/null; then
+        gh release download --repo "$MANA_REPO" -p "mana" -D "$MANA_DIR" --clobber
+    else
+        # Get latest release tag
+        LATEST_TAG=$(curl -s "https://api.github.com/repos/$MANA_REPO/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+        if [[ -z "$LATEST_TAG" ]]; then
+            echo "Error: Could not determine latest mana release."
+            return 1
+        fi
+        curl -L -o "$MANA_BIN" "https://github.com/$MANA_REPO/releases/download/$LATEST_TAG/mana"
+    fi
+
+    chmod +x "$MANA_BIN"
+    echo "mana installed to $MANA_BIN"
+}
+
+# Start mana daemon if not running
+start_mana_daemon() {
+    if "$MANA_BIN" daemon status &>/dev/null; then
+        echo "mana daemon is already running."
+    else
+        echo "Starting mana daemon..."
+        "$MANA_BIN" daemon start
+    fi
+}
+
 # Check and install tmux if needed
 if ! command -v tmux &>/dev/null; then
     install_tmux
@@ -81,6 +146,14 @@ if ! command -v claude &>/dev/null; then
     exit 1
 fi
 
+# Check and install kubectl if needed
+if ! command -v kubectl &>/dev/null; then
+    install_kubectl
+    if ! command -v kubectl &>/dev/null; then
+        echo "Warning: Failed to install kubectl. Continuing without it."
+    fi
+fi
+
 # Ensure tmux config directory exists
 mkdir -p "$TMUX_DIR/plugins"
 mkdir -p "$TMUX_DIR/resurrect"
@@ -88,6 +161,19 @@ mkdir -p "$TMUX_DIR/resurrect"
 # Install TPM and plugins if needed
 install_tpm
 install_plugins
+
+# Install mana if not present
+if [[ ! -x "$MANA_BIN" ]]; then
+    install_mana
+    if [[ ! -x "$MANA_BIN" ]]; then
+        echo "Warning: Failed to install mana. Continuing without it."
+    fi
+fi
+
+# Start mana daemon if mana is installed
+if [[ -x "$MANA_BIN" ]]; then
+    start_mana_daemon
+fi
 
 # Source updated config for any existing tmux server
 if tmux list-sessions &>/dev/null; then

@@ -98,9 +98,30 @@ install_mana() {
     echo "Installing mana..."
     mkdir -p "$MANA_DIR"
 
+    # Detect OS
+    local OS
+    case "$(uname -s)" in
+        Linux)  OS="linux" ;;
+        Darwin) OS="darwin" ;;
+        *) echo "Error: Unsupported OS $(uname -s)"; return 1 ;;
+    esac
+
+    # Detect architecture
+    local ARCH
+    case "$(uname -m)" in
+        x86_64)         ARCH="x86_64" ;;
+        aarch64|arm64)  ARCH="aarch64" ;;
+        *) echo "Error: Unsupported architecture $(uname -m)"; return 1 ;;
+    esac
+
+    local ASSET_NAME="mana-${OS}-${ARCH}.tar.gz"
+    local TARBALL="$MANA_DIR/$ASSET_NAME"
+
+    echo "Detected platform: ${OS}-${ARCH}"
+
     # Download latest release using gh if available, otherwise curl
     if command -v gh &>/dev/null; then
-        gh release download --repo "$MANA_REPO" -p "mana" -D "$MANA_DIR" --clobber
+        gh release download --repo "$MANA_REPO" -p "$ASSET_NAME" -D "$MANA_DIR" --clobber
     else
         # Get latest release tag
         LATEST_TAG=$(curl -s "https://api.github.com/repos/$MANA_REPO/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
@@ -108,11 +129,19 @@ install_mana() {
             echo "Error: Could not determine latest mana release."
             return 1
         fi
-        curl -L -o "$MANA_BIN" "https://github.com/$MANA_REPO/releases/download/$LATEST_TAG/mana"
+        curl -L -o "$TARBALL" "https://github.com/$MANA_REPO/releases/download/$LATEST_TAG/$ASSET_NAME"
     fi
 
-    chmod +x "$MANA_BIN"
-    echo "mana installed to $MANA_BIN"
+    # Extract the binary from tarball
+    if [[ -f "$TARBALL" ]]; then
+        tar -xzf "$TARBALL" -C "$MANA_DIR"
+        rm -f "$TARBALL"
+        chmod +x "$MANA_BIN"
+        echo "mana installed to $MANA_BIN"
+    else
+        echo "Error: Failed to download mana tarball"
+        return 1
+    fi
 }
 
 # Start mana daemon if not running

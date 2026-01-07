@@ -387,38 +387,64 @@ if [ ! -f "$MANA_DIR/mana" ]; then
     # Create mana directory in workspace root
     mkdir -p "$MANA_DIR"
 
-    # Download URL (single binary, no platform variants)
-    MANA_URL="https://github.com/jedarden/MANA/releases/latest/download/mana"
+    # Detect OS
+    MANA_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+    case "$MANA_OS" in
+        linux)  MANA_OS="linux" ;;
+        darwin) MANA_OS="darwin" ;;
+        *)
+            record_status "mana" "❌ Failed" "Unsupported OS: $MANA_OS"
+            MANA_OS=""
+            ;;
+    esac
 
-    MANA_TMP=$(mktemp)
+    # Detect architecture
+    MANA_ARCH=$(uname -m)
+    case "$MANA_ARCH" in
+        x86_64)         MANA_ARCH="x86_64" ;;
+        aarch64|arm64)  MANA_ARCH="aarch64" ;;
+        *)
+            record_status "mana" "❌ Failed" "Unsupported architecture: $MANA_ARCH"
+            MANA_ARCH=""
+            ;;
+    esac
 
-    echo "Downloading MANA from $MANA_URL..."
+    if [ -n "$MANA_OS" ] && [ -n "$MANA_ARCH" ]; then
+        MANA_ASSET="mana-${MANA_OS}-${MANA_ARCH}.tar.gz"
+        MANA_URL="https://github.com/jedarden/MANA/releases/latest/download/$MANA_ASSET"
+        MANA_TMP=$(mktemp)
+        MANA_TARBALL="$MANA_TMP.tar.gz"
 
-    # Try curl first, then wget
-    DOWNLOAD_SUCCESS=false
-    if command_exists curl; then
-        if curl -fsSL "$MANA_URL" -o "$MANA_TMP" 2>/dev/null; then
-            DOWNLOAD_SUCCESS=true
-        fi
-    elif command_exists wget; then
-        if wget -q "$MANA_URL" -O "$MANA_TMP" 2>/dev/null; then
-            DOWNLOAD_SUCCESS=true
-        fi
-    else
-        record_status "mana" "❌ Failed" "Neither curl nor wget available"
-    fi
+        echo "Detected platform: ${MANA_OS}-${MANA_ARCH}"
+        echo "Downloading MANA from $MANA_URL..."
 
-    if [ "$DOWNLOAD_SUCCESS" = true ]; then
-        chmod +x "$MANA_TMP"
-        if mv "$MANA_TMP" "$MANA_DIR/mana" 2>/dev/null; then
-            record_status "mana" "✅ Success" "Installed to $MANA_DIR"
+        # Try curl first, then wget
+        DOWNLOAD_SUCCESS=false
+        if command_exists curl; then
+            if curl -fsSL "$MANA_URL" -o "$MANA_TARBALL" 2>/dev/null; then
+                DOWNLOAD_SUCCESS=true
+            fi
+        elif command_exists wget; then
+            if wget -q "$MANA_URL" -O "$MANA_TARBALL" 2>/dev/null; then
+                DOWNLOAD_SUCCESS=true
+            fi
         else
-            record_status "mana" "❌ Failed" "Could not install binary"
-            rm -f "$MANA_TMP"
+            record_status "mana" "❌ Failed" "Neither curl nor wget available"
         fi
-    else
-        record_status "mana" "❌ Failed" "Download failed"
-        rm -f "$MANA_TMP"
+
+        if [ "$DOWNLOAD_SUCCESS" = true ]; then
+            # Extract the binary from tarball
+            if tar -xzf "$MANA_TARBALL" -C "$MANA_DIR" 2>/dev/null; then
+                chmod +x "$MANA_DIR/mana"
+                record_status "mana" "✅ Success" "Installed to $MANA_DIR (${MANA_OS}-${MANA_ARCH})"
+            else
+                record_status "mana" "❌ Failed" "Could not extract tarball"
+            fi
+            rm -f "$MANA_TARBALL"
+        else
+            record_status "mana" "❌ Failed" "Download failed for ${MANA_OS}-${MANA_ARCH}"
+            rm -f "$MANA_TARBALL"
+        fi
     fi
 else
     record_status "mana" "✅ Already Installed" "Version: $($MANA_DIR/mana --version 2>/dev/null || echo 'unknown')"
@@ -587,11 +613,26 @@ if [ $FAILED_ITEMS -gt 0 ]; then
     if [[ "${INSTALL_STATUS[mana]}" == *"Failed"* ]]; then
         echo "### 🧠 Installing MANA manually" >> "$REPORT_FILE"
         echo "" >> "$REPORT_FILE"
-        echo "Download the binary from GitHub releases to your workspace root:" >> "$REPORT_FILE"
+        echo "Download the binary for your platform from GitHub releases:" >> "$REPORT_FILE"
         echo "" >> "$REPORT_FILE"
+        echo "**For Linux (x86_64):**" >> "$REPORT_FILE"
         echo '```bash' >> "$REPORT_FILE"
         echo "mkdir -p .mana" >> "$REPORT_FILE"
-        echo "curl -fsSL https://github.com/jedarden/MANA/releases/latest/download/mana -o .mana/mana" >> "$REPORT_FILE"
+        echo "curl -fsSL https://github.com/jedarden/MANA/releases/latest/download/mana-linux-x86_64.tar.gz | tar -xz -C .mana" >> "$REPORT_FILE"
+        echo "chmod +x .mana/mana" >> "$REPORT_FILE"
+        echo '```' >> "$REPORT_FILE"
+        echo "" >> "$REPORT_FILE"
+        echo "**For macOS Intel (x86_64):**" >> "$REPORT_FILE"
+        echo '```bash' >> "$REPORT_FILE"
+        echo "mkdir -p .mana" >> "$REPORT_FILE"
+        echo "curl -fsSL https://github.com/jedarden/MANA/releases/latest/download/mana-darwin-x86_64.tar.gz | tar -xz -C .mana" >> "$REPORT_FILE"
+        echo "chmod +x .mana/mana" >> "$REPORT_FILE"
+        echo '```' >> "$REPORT_FILE"
+        echo "" >> "$REPORT_FILE"
+        echo "**For macOS Apple Silicon (aarch64):**" >> "$REPORT_FILE"
+        echo '```bash' >> "$REPORT_FILE"
+        echo "mkdir -p .mana" >> "$REPORT_FILE"
+        echo "curl -fsSL https://github.com/jedarden/MANA/releases/latest/download/mana-darwin-aarch64.tar.gz | tar -xz -C .mana" >> "$REPORT_FILE"
         echo "chmod +x .mana/mana" >> "$REPORT_FILE"
         echo '```' >> "$REPORT_FILE"
         echo "" >> "$REPORT_FILE"

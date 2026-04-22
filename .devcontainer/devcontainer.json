@@ -4,7 +4,9 @@
     "dockerfile": "Dockerfile"
   },
   "remoteUser": "vscode",
-  "runArgs": ["--privileged"],
+  "runArgs": [
+    "--privileged"
+  ],
   "mounts": [
     "source=k8s-cloud-tmp,target=/tmp,type=volume"
   ],

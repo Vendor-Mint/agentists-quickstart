@@ -5,6 +5,9 @@
   },
   "remoteUser": "vscode",
   "runArgs": ["--privileged"],
+  "mounts": [
+    "source=k8s-cloud-tmp,target=/tmp,type=volume"
+  ],
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
       "version": "latest",

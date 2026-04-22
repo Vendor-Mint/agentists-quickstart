@@ -26,12 +26,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set image name to lowercase
+        run: echo "IMAGE_NAME=$(echo ghcr.io/${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
       - name: Pre-build and push DevContainer Image
         uses: devcontainers/ci@v0.3
         with:
-          # Use the exact repository name within the organization
-          imageName: ghcr.io/${{ github.repository }}
-          cacheFrom: ghcr.io/${{ github.repository }}
+          imageName: ${{ env.IMAGE_NAME }}
+          cacheFrom: ${{ env.IMAGE_NAME }}
           # Tag with 'latest' and the commit hash for versioning
           imageTag: latest,${{ github.sha }}
           push: always

@@ -25,14 +25,18 @@ RUN curl -fsSL --output /tmp/cloudflared.deb \
 RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
     && apt-get install -y -qq nodejs > /dev/null
 
-# ─── npm-based tools (Cloudflare, MCP servers) ───
-RUN npm install -g wrangler --silent \
-    && npm install -g @modelcontextprotocol/server-jira --silent \
-    && npm install -g @modelcontextprotocol/server-github --silent \
-    && npm install -g @upstash/context7-mcp --silent \
-    && npm install -g @modelcontextprotocol/server-filesystem --silent \
-    && npm install -g @playwright/mcp@latest --silent \
-    && npx playwright install --with-deps chromium > /dev/null
+# ─── Cloudflare Wrangler CLI ─────────────────────
+RUN npm install -g wrangler --silent
+
+# ─── MCP Servers ─────────────────────────────────
+RUN npm install -g @modelcontextprotocol/server-jira --silent
+RUN npm install -g @modelcontextprotocol/server-github --silent
+RUN npm install -g @upstash/context7-mcp --silent
+RUN npm install -g @modelcontextprotocol/server-filesystem --silent
+
+# ─── Playwright MCP + Chromium ───────────────────
+RUN npm install -g @playwright/mcp@latest --silent
+RUN npx playwright install --with-deps chromium
 
 # ─── Claude Code (official installer as vscode user) ─
 USER vscode

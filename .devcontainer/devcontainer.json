@@ -1,6 +1,8 @@
 {
   "name": "K8s Cloud Workspace",
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
   "remoteUser": "vscode",
   "runArgs": ["--privileged"],
   "features": {
@@ -63,8 +65,6 @@
       ]
     }
   },
-  "onCreateCommand": "bash .devcontainer/on-create.sh",
-  "waitFor": "onCreateCommand",
   "remoteEnv": {
     "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}"
   }

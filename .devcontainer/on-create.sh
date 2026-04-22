@@ -23,13 +23,13 @@ log_step() {
 install_gcloud() {
   log_step 1 "Installing Google Cloud CLI"
   export DEBIAN_FRONTEND=noninteractive
-  sudo apt-get update -qq
-  sudo apt-get install -y -qq apt-transport-https ca-certificates gnupg curl > /dev/null
+  apt-get update -qq
+  apt-get install -y -qq apt-transport-https ca-certificates gnupg curl > /dev/null
   curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
-    | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+    | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
   echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
-    | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list > /dev/null
-  sudo apt-get update -qq && sudo apt-get install -y -qq google-cloud-cli > /dev/null
+    | tee /etc/apt/sources.list.d/google-cloud-sdk.list > /dev/null
+  apt-get update -qq && apt-get install -y -qq google-cloud-cli > /dev/null
   echo "  ✓ gcloud $(gcloud version --format='value(Google Cloud SDK)' 2>/dev/null || echo 'installed')"
 }
 
@@ -44,7 +44,7 @@ install_cloudflare() {
   # Cloudflared tunnel — architecture-aware
   local deb_url="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH}.deb"
   curl -fsSL --output /tmp/cloudflared.deb "$deb_url"
-  sudo dpkg -i /tmp/cloudflared.deb > /dev/null
+  dpkg -i /tmp/cloudflared.deb > /dev/null
   rm -f /tmp/cloudflared.deb
   echo "  ✓ cloudflared $(cloudflared --version 2>/dev/null || echo 'installed')"
 }
@@ -70,8 +70,8 @@ done
 # ─── Cleanup ─────────────────────────────────────
 echo ""
 echo "══════════════════════════════════════════════"
-sudo apt-get clean > /dev/null 2>&1
-sudo rm -rf /var/lib/apt/lists/*
+apt-get clean > /dev/null 2>&1
+rm -rf /var/lib/apt/lists/*
 
 if [ ${#FAILED_STEPS[@]} -eq 0 ]; then
   echo "  ✅ All tools installed successfully"

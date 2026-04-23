@@ -26,9 +26,10 @@
       "configureZshAsDefaultShell": true
     },
     "ghcr.io/devcontainers/features/git:1": {},
-    "ghcr.io/devcontainers/features/node:1": {
-      "version": "lts"
+    "ghcr.io/dhoeric/features/google-cloud-cli:1": {
+      "version": "latest"
     },
+    "ghcr.io/devcontainers-extra/features/cloudflared:1": {},
     "ghcr.io/devcontainers/features/python:1": {
       "version": "latest"
     },

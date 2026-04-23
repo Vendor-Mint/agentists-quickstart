@@ -27,7 +27,13 @@
     },
     "ghcr.io/devcontainers/features/dotnet:2": {
       "version": "latest"
-    }
+    },
+    "ghcr.io/joedmck/devcontainer-features/cloudflared:1": {},
+    "ghcr.io/dhoeric/features/google-cloud-cli:1": {
+      "version": "latest"
+    },
+    "ghcr.io/duduribeiro/devcontainer-features/tmux:1": {},
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
   },
   "customizations": {
     "vscode": {
@@ -59,13 +65,18 @@
         "redhat.vscode-yaml",
         "rangav.vscode-thunder-client",
         "googlecloudtools.cloudcode",
-        "ms-toolsai.jupyter"
+        "ms-toolsai.jupyter",
+        "ms-playwright.playwright"
       ]
     }
   },
+  "mounts": [
+    "source=k8s-cloud-tmp,target=/tmp,type=volume"
+  ],
   "onCreateCommand": "bash .devcontainer/on-create.sh",
   "waitFor": "onCreateCommand",
   "remoteEnv": {
-    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}"
+    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
+    "GITHUB_PERSONAL_ACCESS_TOKEN": "${localEnv:GITHUB_PERSONAL_ACCESS_TOKEN}"
   }
 }

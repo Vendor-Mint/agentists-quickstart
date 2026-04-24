@@ -7,7 +7,7 @@ set -euo pipefail
 # ─────────────────────────────────────────────────
 
 ARCH=$(dpkg --print-architecture)  # amd64 | arm64
-TOTAL_STEPS=3
+TOTAL_STEPS=4
 FAILED_STEPS=()
 
 log_step() {
@@ -22,20 +22,14 @@ log_step() {
 # ─── Pre-step: Initialize Claude Config ──────────
 init_claude() {
   echo "  ⚙ Initializing Claude configuration..."
-  # Force onboarding as completed to avoid interactive prompts
+  # Force onboarding as completed and set permissions to bypass completely
   echo '{"hasCompletedOnboarding": true}' > ~/.claude.json
+  echo '{"permissions": {"defaultMode": "bypassPermissions"}}' > ~/.claude/settings.json
 }
 
-# ─── Step 1: Playwright (Chromium only) ──────────
-install_playwright() {
-  log_step 1 "Installing Playwright with Chromium"
-  npx -y playwright install --with-deps chromium
-  echo "  ✓ Playwright + Chromium installed"
-}
-
-# ─── Step 2: Install Claude Code ─────────────────
+# ─── Step 1: Install Claude Code ─────────────────
 install_claude() {
-  log_step 2 "Installing Claude Code CLI"
+  log_step 1 "Installing Claude Code CLI"
   curl -fsSL https://claude.ai/install.sh | bash
   echo "  ✓ Claude Code CLI installed"
 
@@ -43,9 +37,64 @@ install_claude() {
   init_claude
 }
 
-# ─── Step 3: Configure Claude Code MCPs ──────────
+# ─── Step 2: Load Kubernetes Secrets ─────────────
+load_secrets() {
+  log_step 2 "Loading secrets from Kubernetes"
+
+  # 1. Get the namespace injected by Kubernetes into the Pod
+  local namespace
+  namespace=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
+  
+  # 2. Extract the DEV_NAME (removing 'dev-' prefix) to construct the secret name
+  local dev_name=${namespace#dev-}
+  local secret_name="${dev_name}-api-secrets"
+
+  echo "  🔒 Fetching credentials from secret: $secret_name in $namespace"
+
+  # 3. Validate that the secret exists before attempting to read it
+  local k8s_response
+  if ! k8s_response=$(sudo -E kubectl get secret "$secret_name" -n "$namespace" 2>&1); then
+    echo "  ❌ ERROR from Kubernetes API:"
+    echo "     $k8s_response"
+    return 1
+  fi
+
+  # 4. Extract, decode, and export the variables to the environment
+  export CONTEXT7_API_KEY=$(sudo -E kubectl get secret "$secret_name" -n "$namespace" -o jsonpath="{.data.CONTEXT7_API_KEY}" | base64 --decode)
+  echo "  ✓ CONTEXT7_API_KEY successfully loaded"
+
+  export CLAUDE_CODE_OAUTH_TOKEN=$(sudo -E kubectl get secret "$secret_name" -n "$namespace" -o jsonpath="{.data.CLAUDE_CODE_OAUTH_TOKEN}" | base64 --decode)
+  echo "  ✓ CLAUDE_CODE_OAUTH_TOKEN successfully loaded"
+
+  sudo tee /etc/profile.d/api-secrets.sh > /dev/null <<-EOF
+		export CONTEXT7_API_KEY='${CONTEXT7_API_KEY}'
+		export CLAUDE_CODE_OAUTH_TOKEN='${CLAUDE_CODE_OAUTH_TOKEN}'
+	EOF
+
+  sudo chmod 644 /etc/profile.d/api-secrets.sh
+
+  if ! grep -q "source /etc/profile.d/api-secrets.sh" ~/.zshrc 2>/dev/null; then
+    echo "source /etc/profile.d/api-secrets.sh" >> ~/.zshrc
+  fi
+}
+
+# ─── Step 3: Install Cloud SQL Auth Proxy ────────
+install_cloud_sql_proxy() {
+  log_step 3 "Installing Cloud SQL Auth Proxy"
+
+  # Install the official Cloud SQL Auth Proxy
+  curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.21.1/cloud-sql-proxy.linux.amd64
+
+  # Grant execute permissions and move it to the PATH
+  chmod +x cloud-sql-proxy
+  sudo mv cloud-sql-proxy /usr/local/bin/
+  
+  echo "  ✓ Cloud SQL Auth Proxy installed"
+}
+
+# ─── Step 4: Configure Claude Code MCPs ──────────
 configure_mcps() {
-  log_step 3 "Configuring Claude Code MCP servers"
+  log_step 4 "Configuring Claude Code MCP servers"
 
   # Wait for claude to be available
   if ! command -v claude &> /dev/null; then
@@ -59,7 +108,7 @@ configure_mcps() {
   fi
 
   # Playwright MCP
-  claude mcp add playwright -s user -- npx -y @playwright/mcp@latest
+  claude mcp add playwright -s user -- npx -y @playwright/mcp@latest --browser chromium
   echo "  ✓ MCP: playwright"
 
   # GitHub MCP (authenticates via GitHub CLI extension 'gh-mcp')
@@ -69,7 +118,7 @@ configure_mcps() {
   echo "  ✓ MCP: github (via gh CLI)"
 
   # Context7 MCP (using API key from env)
-  claude mcp add context7 -s user -e CONTEXT7_API_KEY="$CONTEXT7_API_KEY" -- npx -y @upstash/context7-mcp@latest
+  claude mcp add --scope user context7 -- npx -y @upstash/context7-mcp --api-key "$CONTEXT7_API_KEY"
   echo "  ✓ MCP: context7"
 
   # Filesystem MCP
@@ -84,7 +133,7 @@ configure_mcps() {
 }
 
 # ─── Run all steps ───────────────────────────────
-for step_fn in install_playwright install_claude configure_mcps; do
+for step_fn in install_claude load_secrets install_cloud_sql_proxy configure_mcps; do
   if ! $step_fn; then
     FAILED_STEPS+=("$step_fn")
     echo "  ✗ $step_fn failed — continuing with remaining steps"

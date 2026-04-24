@@ -2,11 +2,6 @@
   "name": "K8s Cloud Workspace",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
   "remoteUser": "vscode",
-  "runArgs": [
-    "--privileged",
-    "--env-file",
-    ".env"
-  ],
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
       "version": "latest",
@@ -74,10 +69,8 @@
       ]
     }
   },
-  "mounts": [
-    "source=k8s-cloud-tmp,target=/tmp,type=volume"
-  ],
   "onCreateCommand": "bash .devcontainer/on-create.sh",
-  "waitFor": "onCreateCommand",
+  "postCreateCommand": "bash -i -c 'npm install -g playwright && npx playwright install --with-deps chromium'",
+  "waitFor": "postCreateCommand",
   "remoteEnv": {}
 }

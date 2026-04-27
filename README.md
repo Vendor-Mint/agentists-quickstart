@@ -82,6 +82,7 @@ devpod provider use kubernetes \
   -o KUBERNETES_NAMESPACE=dev-<dev_name> \
   -o CREATE_NAMESPACE=false \
   -o WORKSPACE_VOLUME_MOUNT=/workspaces \
+  -o ARCHITECTURE=amd64=amd64 \
   -o DISK_SIZE=20Gi \
   -o RESOURCES=requests.cpu=6,requests.memory=12Gi,limits.cpu=8,limits.memory=15Gi
 ```
@@ -92,6 +93,7 @@ devpod provider use kubernetes \
 | `KUBERNETES_NAMESPACE` | `dev-<dev_name>` | Your scoped kubeconfig only allows this namespace. |
 | `CREATE_NAMESPACE` | `false` | The namespace was already created by `k8s-cloud-manager`. Your kubeconfig has no rights to create namespaces, so leaving the default (`true`) makes `devpod up` fail with a `forbidden` error. |
 | `WORKSPACE_VOLUME_MOUNT` | `/workspaces` | Mounts the **parent** `/workspaces` directory instead of just the single-repo path (`/workspaces/<workspace-id>`). Lets you clone or create additional repos alongside this one and have them all persist on the same PVC. |
+| `NODE_SELECTOR` | `kubernetes.io/arch=amd64` | Forces the pod to schedule on `amd64` nodes only. The base image and several binaries pulled by `on-create.sh` (e.g. `cloud-sql-proxy.linux.amd64`) are amd64-only — landing on an arm64 node would crash with `exec format error`. |
 | `DISK_SIZE` | `20Gi` | Matches the manager's `PVC_SIZE` and Rackspace's standard storage class limit. |
 | `RESOURCES` | `requests.cpu=6,requests.memory=12Gi,limits.cpu=8,limits.memory=15Gi` | Matches `REQ_CPU` / `REQ_MEM` / `LIMIT_CPU` / `LIMIT_MEM` from the manager's defaults. |
 

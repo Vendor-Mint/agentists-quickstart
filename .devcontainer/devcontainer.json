@@ -38,6 +38,7 @@
     "vscode": {
       "settings": {
         "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.cwd": "/workspaces",
         "editor.formatOnSave": true,
         "[javascript]": {
           "editor.defaultFormatter": "esbenp.prettier-vscode"
@@ -70,7 +71,8 @@
     }
   },
   // "workspaceFolder": "/workspaces",
-  // "onCreateCommand": "cd /workspaces/${localWorkspaceFolderBasename} && bash .devcontainer/on-create.sh",
+  // "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${devcontainerId},type=bind",
+  // "onCreateCommand": "cd /workspaces/${localWorkspaceFolder} && bash .devcontainer/on-create.sh",
   "onCreateCommand": "bash .devcontainer/on-create.sh",
   "postCreateCommand": "bash -i -c 'npm install -g playwright && npx playwright install --with-deps chromium'",
   "waitFor": "postCreateCommand",

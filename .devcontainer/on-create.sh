@@ -84,6 +84,12 @@ load_secrets() {
   if ! grep -q "source /etc/profile.d/api-secrets.sh" ~/.zshrc 2>/dev/null; then
     echo "source /etc/profile.d/api-secrets.sh" >> ~/.zshrc
   fi
+
+  # Land every interactive shell in /workspaces so the dev sees the parent
+  # holding all repos instead of the devcontainer source folder. Idempotent.
+  if ! grep -q "cd /workspaces" ~/.zshrc 2>/dev/null; then
+    echo "cd /workspaces 2>/dev/null" >> ~/.zshrc
+  fi
 }
 
 # ─── Step 3: Install Cloud SQL Auth Proxy ────────

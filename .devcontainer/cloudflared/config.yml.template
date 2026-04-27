@@ -1,0 +1,9 @@
+tunnel: ${TUNNEL_ID}
+credentials-file: /home/vscode/.cloudflared/${TUNNEL_ID}.json
+
+ingress:
+  #- hostname: app1.${DEV_NAME}.dev.vendormint.ai
+  #  service: http://localhost:4321
+  #- hostname: api.${DEV_NAME}.dev.vendormint.ai
+  #  service: http://localhost:3000
+  - service: http_status:404

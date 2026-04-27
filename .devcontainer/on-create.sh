@@ -7,7 +7,7 @@ set -euo pipefail
 # ─────────────────────────────────────────────────
 
 ARCH=$(dpkg --print-architecture)  # amd64 | arm64
-TOTAL_STEPS=4
+TOTAL_STEPS=5
 FAILED_STEPS=()
 
 log_step() {
@@ -44,10 +44,11 @@ load_secrets() {
   # 1. Get the namespace injected by Kubernetes into the Pod
   local namespace
   namespace=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
-  
-  # 2. Extract the DEV_NAME (removing 'dev-' prefix) to construct the secret name
-  local dev_name=${namespace#dev-}
-  local secret_name="${dev_name}-api-secrets"
+
+  # 2. Extract the DEV_NAME (removing 'dev-' prefix) to construct the secret name.
+  #    Exported so later steps (e.g. cloudflared) can reuse it.
+  export DEV_NAME=${namespace#dev-}
+  local secret_name="${DEV_NAME}-api-secrets"
 
   echo "  🔒 Fetching credentials from secret: $secret_name in $namespace"
 
@@ -65,6 +66,13 @@ load_secrets() {
 
   export CLAUDE_CODE_OAUTH_TOKEN=$(sudo -E kubectl get secret "$secret_name" -n "$namespace" -o jsonpath="{.data.CLAUDE_CODE_OAUTH_TOKEN}" | base64 --decode)
   echo "  ✓ CLAUDE_CODE_OAUTH_TOKEN successfully loaded"
+
+  export CLOUDFLARED_TOKEN=$(sudo -E kubectl get secret "$secret_name" -n "$namespace" -o jsonpath="{.data.CLOUDFLARED_TOKEN}" | base64 --decode)
+  if [ -n "$CLOUDFLARED_TOKEN" ]; then
+    echo "  ✓ CLOUDFLARED_TOKEN successfully loaded"
+  else
+    echo "  ⚠ CLOUDFLARED_TOKEN is empty — tunnel configuration will be skipped"
+  fi
 
   sudo tee /etc/profile.d/api-secrets.sh > /dev/null <<-EOF
 		export CONTEXT7_API_KEY='${CONTEXT7_API_KEY}'
@@ -132,8 +140,71 @@ configure_mcps() {
   echo "  ✓ All MCP servers configured"
 }
 
+# ─── Step 5: Configure Cloudflared Tunnel ────────
+configure_cloudflared() {
+  log_step 5 "Configuring Cloudflared tunnel"
+
+  if [ -z "${CLOUDFLARED_TOKEN:-}" ]; then
+    echo "  ⚠ CLOUDFLARED_TOKEN not set, skipping tunnel configuration"
+    return 0
+  fi
+
+  if ! command -v cloudflared &>/dev/null; then
+    echo "  ✗ cloudflared binary not found"
+    return 1
+  fi
+
+  # The tunnel token is base64-encoded JSON: {"a":"<account>","t":"<tunnel id>","s":"<secret>"}
+  local decoded
+  if ! decoded=$(printf '%s' "$CLOUDFLARED_TOKEN" | base64 -d 2>/dev/null); then
+    echo "  ✗ Failed to base64-decode CLOUDFLARED_TOKEN"
+    return 1
+  fi
+
+  local account_tag tunnel_id tunnel_secret
+  account_tag=$(printf '%s' "$decoded" | python3 -c 'import json,sys; print(json.load(sys.stdin)["a"])') || {
+    echo "  ✗ Failed to parse account tag from token"
+    return 1
+  }
+  tunnel_id=$(printf '%s' "$decoded" | python3 -c 'import json,sys; print(json.load(sys.stdin)["t"])')
+  tunnel_secret=$(printf '%s' "$decoded" | python3 -c 'import json,sys; print(json.load(sys.stdin)["s"])')
+
+  local cf_dir="$HOME/.cloudflared"
+  mkdir -p "$cf_dir"
+  chmod 700 "$cf_dir"
+
+  # Credentials file expected by `cloudflared tunnel run` when using config.yml
+  local creds_file="$cf_dir/${tunnel_id}.json"
+  printf '{"AccountTag":"%s","TunnelID":"%s","TunnelSecret":"%s"}\n' \
+    "$account_tag" "$tunnel_id" "$tunnel_secret" > "$creds_file"
+  chmod 600 "$creds_file"
+  echo "  ✓ Wrote credentials file: $creds_file"
+
+  # Render config.yml from the template shipped in this repo. If the user already
+  # customized their config.yml (e.g. added ingress rules), do not overwrite it.
+  local template=".devcontainer/cloudflared/config.yml.template"
+  local config_file="$cf_dir/config.yml"
+
+  if [ ! -f "$template" ]; then
+    echo "  ⚠ Template not found at $template, skipping config.yml generation"
+  elif [ -f "$config_file" ]; then
+    echo "  ✓ Existing $config_file preserved (not overwritten)"
+  else
+    DEV_NAME="${DEV_NAME}" TUNNEL_ID="${tunnel_id}" \
+      envsubst '${DEV_NAME} ${TUNNEL_ID}' < "$template" > "$config_file"
+    chmod 600 "$config_file"
+    echo "  ✓ Rendered $config_file"
+  fi
+
+  echo ""
+  echo "  ℹ Tunnel is NOT auto-started. To expose your apps:"
+  echo "      1. Edit $config_file and add one ingress rule per app."
+  echo "      2. Start the tunnel with: cloudflared tunnel run"
+  echo "      3. Apps will be reachable at https://<app>.${DEV_NAME}.dev.vendormint.ai"
+}
+
 # ─── Run all steps ───────────────────────────────
-for step_fn in install_claude load_secrets install_cloud_sql_proxy configure_mcps; do
+for step_fn in install_claude load_secrets install_cloud_sql_proxy configure_mcps configure_cloudflared; do
   if ! $step_fn; then
     FAILED_STEPS+=("$step_fn")
     echo "  ✗ $step_fn failed — continuing with remaining steps"

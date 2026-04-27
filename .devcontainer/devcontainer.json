@@ -69,6 +69,8 @@
       ]
     }
   },
+  // "workspaceFolder": "/workspaces",
+  // "onCreateCommand": "cd /workspaces/${localWorkspaceFolderBasename} && bash .devcontainer/on-create.sh",
   "onCreateCommand": "bash .devcontainer/on-create.sh",
   "postCreateCommand": "bash -i -c 'npm install -g playwright && npx playwright install --with-deps chromium'",
   "waitFor": "postCreateCommand",

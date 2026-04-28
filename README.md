@@ -86,7 +86,7 @@ devpod provider use kubernetes \
   -o ARCHITECTURE=amd64 \
   -o STORAGE_CLASS=ssd-large \
   -o DISK_SIZE=50Gi \
-  -o RESOURCES=requests.cpu=6,requests.memory=12Gi,limits.cpu=8,limits.memory=15Gi
+  -o RESOURCES=requests.cpu=8,requests.memory=15Gi,limits.cpu=16,limits.memory=30Gi
 ```
 
 | Option | Value | Why |

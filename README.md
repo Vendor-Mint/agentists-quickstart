@@ -25,6 +25,7 @@ Throughout this document, `<dev_name>` is the name admin used when provisioning 
 ```bash
 git clone <repo-url> k8s-cloud-workspace
 cd k8s-cloud-workspace
+git checkout k8s-cloud-workspace
 ```
 
 ### 2. Install DevPod and `kubectl`
@@ -59,8 +60,8 @@ For direct `kubectl` usage (sanity checks, debugging) export `KUBECONFIG` so eve
 
 ```bash
 # Persist in your shell rc (zsh shown — use ~/.bashrc for bash)
-echo 'export KUBECONFIG=$HOME/.kube/kubeconfig-<dev_name>.yaml' >> ~/.zshrc
-source ~/.zshrc
+readlink -f ~/.kube/kubeconfig-<dev_name>.yaml
+export KUBECONFIG=FILE_PATH
 ```
 
 Sanity check — you should see your pod (or nothing yet) but never get `forbidden` for namespace `dev-<dev_name>`:
@@ -82,8 +83,9 @@ devpod provider use kubernetes \
   -o KUBERNETES_NAMESPACE=dev-<dev_name> \
   -o CREATE_NAMESPACE=false \
   -o WORKSPACE_VOLUME_MOUNT=/workspaces \
-  -o ARCHITECTURE=amd64=amd64 \
-  -o DISK_SIZE=20Gi \
+  -o ARCHITECTURE=amd64 \
+  -o STORAGE_CLASS=ssd-large \
+  -o DISK_SIZE=50Gi \
   -o RESOURCES=requests.cpu=6,requests.memory=12Gi,limits.cpu=8,limits.memory=15Gi
 ```
 
@@ -93,8 +95,9 @@ devpod provider use kubernetes \
 | `KUBERNETES_NAMESPACE` | `dev-<dev_name>` | Your scoped kubeconfig only allows this namespace. |
 | `CREATE_NAMESPACE` | `false` | The namespace was already created by `k8s-cloud-manager`. Your kubeconfig has no rights to create namespaces, so leaving the default (`true`) makes `devpod up` fail with a `forbidden` error. |
 | `WORKSPACE_VOLUME_MOUNT` | `/workspaces` | Mounts the **parent** `/workspaces` directory instead of just the single-repo path (`/workspaces/<workspace-id>`). Lets you clone or create additional repos alongside this one and have them all persist on the same PVC. |
-| `NODE_SELECTOR` | `kubernetes.io/arch=amd64` | Forces the pod to schedule on `amd64` nodes only. The base image and several binaries pulled by `on-create.sh` (e.g. `cloud-sql-proxy.linux.amd64`) are amd64-only — landing on an arm64 node would crash with `exec format error`. |
-| `DISK_SIZE` | `20Gi` | Matches the manager's `PVC_SIZE` and Rackspace's standard storage class limit. |
+| `ARCHITECTURE` | `amd64` | Forces the pod to schedule on `amd64` nodes only. The base image and several binaries pulled by `on-create.sh` (e.g. `cloud-sql-proxy.linux.amd64`) are amd64-only — landing on an arm64 node would crash with `exec format error`. |
+| `STORAGE_CLASS` | `ssd-large` | Rackspace's default storage class caps PVCs at 20Gi, which is too small once dockerless writes the devcontainer rootfs into `/workspaces/.dockerless/`. The `ssd-large` class allows the larger `DISK_SIZE` below. |
+| `DISK_SIZE` | `50Gi` | Enough headroom for the dockerless build (`/workspaces/.dockerless/` ≈ 1-2Gi) plus the developer's clones and caches. Requires `STORAGE_CLASS=ssd-large`. |
 | `RESOURCES` | `requests.cpu=6,requests.memory=12Gi,limits.cpu=8,limits.memory=15Gi` | Matches `REQ_CPU` / `REQ_MEM` / `LIMIT_CPU` / `LIMIT_MEM` from the manager's defaults. |
 
 ### 5. Bring up the workspace

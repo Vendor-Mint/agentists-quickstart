@@ -32,15 +32,33 @@ git checkout k8s-cloud-workspace
 
 DevPod uses `kubectl` under the hood and you will also use it directly for sanity checks and debugging.
 
+**macOS** (Homebrew):
+
 ```bash
-# macOS (Homebrew)
 brew install --cask devpod
 brew install kubectl
-
-# Linux / other — see https://devpod.sh/ and https://kubernetes.io/docs/tasks/tools/
 ```
 
-Verify both are on your PATH:
+**Linux** (Debian / Ubuntu — adjust for your distro):
+
+```bash
+# DevPod
+curl -L -o devpod "https://github.com/loft-sh/devpod/releases/latest/download/devpod-linux-amd64"
+sudo install -m 0755 devpod /usr/local/bin/devpod && rm -f devpod
+
+# kubectl
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl && rm -f kubectl
+```
+
+**Windows** (PowerShell with `winget`):
+
+```powershell
+winget install Loft.DevPod
+winget install Kubernetes.kubectl
+```
+
+Verify both are on your PATH (any OS):
 
 ```bash
 devpod version
@@ -49,22 +67,45 @@ kubectl version --client
 
 ### 3. Save the kubeconfig admin sent you
 
-Keep it isolated from any other kubeconfig you may have:
+Keep it isolated from any other kubeconfig, then export `KUBECONFIG` so `kubectl` finds it. This export only lives in the current shell — re-run it in any new terminal where you need direct `kubectl` access. The DevPod provider in step 4 stores its own pointer to the same file, so DevPod itself is not affected by whether this env var is set or not.
+
+**macOS**:
 
 ```bash
 mkdir -p ~/.kube
 mv ~/Downloads/kubeconfig-<dev_name>.yaml ~/.kube/kubeconfig-<dev_name>.yaml
+
+# Resolve and export for this shell
+KUBECONFIG_PATH=$(readlink -f ~/.kube/kubeconfig-<dev_name>.yaml)
+echo "$KUBECONFIG_PATH"        # prints the absolute path
+export KUBECONFIG="$KUBECONFIG_PATH"
 ```
 
-For direct `kubectl` usage (sanity checks, debugging) export `KUBECONFIG` so every new shell sees it. The DevPod provider in step 4 will get its own pointer to the same file, so DevPod is not affected by whether this env var is set or not.
+**Linux**:
 
 ```bash
-# Persist in your shell rc (zsh shown — use ~/.bashrc for bash)
-readlink -f ~/.kube/kubeconfig-<dev_name>.yaml
-export KUBECONFIG=FILE_PATH
+mkdir -p ~/.kube
+mv ~/Downloads/kubeconfig-<dev_name>.yaml ~/.kube/kubeconfig-<dev_name>.yaml
+
+# Resolve and export for this shell
+KUBECONFIG_PATH=$(realpath ~/.kube/kubeconfig-<dev_name>.yaml)
+echo "$KUBECONFIG_PATH"        # prints the absolute path
+export KUBECONFIG="$KUBECONFIG_PATH"
 ```
 
-Sanity check — you should see your pod (or nothing yet) but never get `forbidden` for namespace `dev-<dev_name>`:
+**Windows** (PowerShell):
+
+```powershell
+New-Item -ItemType Directory -Force -Path "$HOME\.kube" | Out-Null
+Move-Item "$HOME\Downloads\kubeconfig-<dev_name>.yaml" "$HOME\.kube\kubeconfig-<dev_name>.yaml"
+
+# Resolve and export for this shell
+$KubeconfigPath = (Resolve-Path "$HOME\.kube\kubeconfig-<dev_name>.yaml").Path
+$KubeconfigPath                # prints the absolute path
+$env:KUBECONFIG = $KubeconfigPath
+```
+
+Sanity check (any OS) — you should see your pod (or nothing yet) but never get `forbidden` for namespace `dev-<dev_name>`:
 
 ```bash
 kubectl get pods -n dev-<dev_name>
@@ -77,6 +118,9 @@ Pass the kubeconfig path explicitly with `-o KUBERNETES_CONFIG=...` so DevPod's 
 ```bash
 devpod provider add kubernetes
 ```
+
+**macOS / Linux** (bash/zsh — backslashes for line continuation):
+
 ```bash
 devpod provider use kubernetes \
   -o KUBERNETES_CONFIG=$HOME/.kube/kubeconfig-<dev_name>.yaml \
@@ -86,6 +130,20 @@ devpod provider use kubernetes \
   -o ARCHITECTURE=amd64 \
   -o STORAGE_CLASS=ssd-large \
   -o DISK_SIZE=50Gi \
+  -o RESOURCES=requests.cpu=8,requests.memory=15Gi,limits.cpu=16,limits.memory=30Gi
+```
+
+**Windows** (PowerShell — backticks for line continuation):
+
+```powershell
+devpod provider use kubernetes `
+  -o KUBERNETES_CONFIG=$HOME\.kube\kubeconfig-<dev_name>.yaml `
+  -o KUBERNETES_NAMESPACE=dev-<dev_name> `
+  -o CREATE_NAMESPACE=false `
+  -o WORKSPACE_VOLUME_MOUNT=/workspaces `
+  -o ARCHITECTURE=amd64 `
+  -o STORAGE_CLASS=ssd-large `
+  -o DISK_SIZE=50Gi `
   -o RESOURCES=requests.cpu=8,requests.memory=15Gi,limits.cpu=16,limits.memory=30Gi
 ```
 

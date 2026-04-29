@@ -74,7 +74,7 @@
   // "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${devcontainerId},type=bind",
   // "onCreateCommand": "cd /workspaces/${localWorkspaceFolder} && bash .devcontainer/on-create.sh",
   "onCreateCommand": "bash .devcontainer/on-create.sh",
-  "postCreateCommand": "bash -i -c 'npm install -g playwright && npx playwright install --with-deps chromium'",
+  "postCreateCommand": "bash -i -c 'npm install -g playwright && npx playwright install --with-deps chromium && npx -y @playwright/mcp@latest install-browser chrome-for-testing'",
   "waitFor": "postCreateCommand",
   "remoteEnv": {}
 }

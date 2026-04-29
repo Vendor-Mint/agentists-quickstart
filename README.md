@@ -315,6 +315,7 @@ Any regular terminal. Run your app, `git`, `kubectl`, `npm install`, scratch bui
 | Google libraries error: *"Could not automatically determine credentials"* | Run `gcloud auth application-default login`. |
 | `cloud-sql-proxy` exits with *"permission denied"* | Wrong instance connection name, or your Google user lacks the `Cloud SQL Client` IAM role. Confirm both with admin. |
 | Claude says Atlassian session expired | Re-send the auth prompt: *"Authenticate the Jira MCP and verify it works."* |
+| Playwright MCP says *"Chrome for Testing not available"* / *"Executable doesn't exist"* | The MCP-bundled browser was not installed (or version mismatch). Run inside the container: `npx @playwright/mcp install-browser chrome-for-testing` |
 | `cloudflared tunnel run` → *"couldn't read credentials"* | Your secret did not contain `CLOUDFLARED_TOKEN` when the container was created. Re-run `bash .devcontainer/on-create.sh`. |
 | Browser → 502 / Connection refused after Cloudflare login | App not listening on the port in `config.yml`. Check with `curl http://localhost:<port>` inside the container. |
 | Browser → SSL handshake failure on `https://<app>.<dev_name>...` | The Advanced Certificate does not yet cover `*.<dev_name>.dev.vendormint.ai`. Admin task — ping admin. |

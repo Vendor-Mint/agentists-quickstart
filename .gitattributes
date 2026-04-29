@@ -1,0 +1,12 @@
+# Force LF line endings for files that run inside the Linux devcontainer
+# pod regardless of the developer's local OS. Without this, Windows checkouts
+# get CRLF (because Git for Windows defaults to core.autocrlf=true), which
+# breaks shell scripts with errors like:
+#
+#   on-create.sh: line 2: set: pipefail\r: invalid option name
+#
+# Anything under .devcontainer/ (scripts, templates, JSON config) is rendered
+# or executed inside the Linux pod and must stay LF-only.
+
+*.sh                text eol=lf
+.devcontainer/**    text eol=lf

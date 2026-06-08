@@ -1,6 +1,6 @@
 {
   "name": "K8s Cloud Workspace",
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
   "remoteUser": "vscode",
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {

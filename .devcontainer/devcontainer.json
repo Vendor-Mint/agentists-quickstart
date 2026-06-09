@@ -1,6 +1,6 @@
 {
   "name": "K8s Cloud Workspace",
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
   "remoteUser": "vscode",
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
@@ -28,7 +28,7 @@
     "ghcr.io/devcontainers/features/dotnet:2": {
       "version": "latest"
     },
-    "ghcr.io/joedmck/devcontainer-features/cloudflared:1": {},
+    "ghcr.io/joedmck/devcontainer-features/cloudflared:1.0.2": {},
     "ghcr.io/dhoeric/features/google-cloud-cli:1": {
       "version": "latest"
     },

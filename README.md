@@ -363,6 +363,86 @@ Any regular terminal. Run your app, `git`, `kubectl`, `npm install`, scratch bui
 
 ---
 
+## Backing up workspace data
+
+All persistent work lives on the PVC mounted at `/workspaces` — cloned repos, uncommitted changes, and anything else you created there. Before a destructive rebuild (e.g. deleting `.dockerless` or running `devpod up . --recreate`), back up that directory.
+
+**Push git repos first** when you can — that is the best backup for code. Use the tarball below for everything else on the volume (uncommitted work across multiple repos, local-only files, etc.).
+
+### 1. Create the archive (inside the workspace)
+
+SSH in as `root` if the `vscode` user is missing (broken devcontainer build):
+
+```bash
+devpod ssh . --user root
+```
+
+Create the tarball. Exclude `.dockerless` (rebuildable devcontainer cache), `.pnpm-store` (large package cache), and `k8s-cloud-workspace` (this DevPod repo — restoring it would overwrite your current devcontainer setup):
+
+```bash
+tar czf /tmp/workspaces-backup.tar.gz -C /workspaces --exclude='.dockerless' --exclude='.pnpm-store' --exclude='k8s-cloud-workspace' .
+```
+
+Check size and record a checksum before downloading:
+
+```bash
+ls -lh /tmp/workspaces-backup.tar.gz
+sha256sum /tmp/workspaces-backup.tar.gz | awk '{print $1}' | tee /tmp/workspaces-backup.sha256
+```
+
+### 2. Download locally
+
+Run this **locally** (not inside the container):
+
+```bash
+devpod ssh . --user root --command 'cat /tmp/workspaces-backup.tar.gz' > ~/workspaces-backup.tar.gz
+```
+
+### 3. Verify the download
+
+Streaming a binary over SSH can corrupt silently. Compare the local checksum to the one recorded in the container:
+
+```bash
+REMOTE_HASH=$(devpod ssh . --user root --command 'cat /tmp/workspaces-backup.sha256')
+LOCAL_HASH=$(sha256sum ~/workspaces-backup.tar.gz | awk '{print $1}')
+test "$REMOTE_HASH" = "$LOCAL_HASH" && echo "OK: checksum matches" || echo "FAIL: checksum mismatch — re-download"
+```
+
+Optionally confirm the archive is readable:
+
+```bash
+tar tzf ~/workspaces-backup.tar.gz | head
+```
+
+### What is not included
+
+| Path | Why |
+|---|---|
+| `/workspaces/.dockerless` | Devcontainer build cache — safe to drop and rebuild |
+| `/workspaces/.pnpm-store` | Package cache — can be re-downloaded |
+| `/workspaces/k8s-cloud-workspace` | This DevPod repo — excluded so restore does not overwrite the current devcontainer |
+
+### Restore
+
+After the workspace is running again (`devpod up . --recreate`).
+
+#### 1. Upload the tarball
+
+Open the workspace in VS Code, drag `workspaces-backup.tar.gz` from your Mac into the Explorer under `/workspaces`, then in the integrated terminal:
+
+```bash
+sudo mv /workspaces/workspaces-backup.tar.gz /tmp/
+```
+
+#### 2. Extract into `/workspaces`
+
+```bash
+sudo tar xzf /tmp/workspaces-backup.tar.gz -C /workspaces
+sudo chown -R vscode:vscode /workspaces
+```
+
+---
+
 ## Troubleshooting
 
 | Symptom | Fix |
